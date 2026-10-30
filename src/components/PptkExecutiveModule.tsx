@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import {
   BarChart3,
   BookCheck,
+  Code2,
   FolderTree,
   Printer,
+  RotateCcw,
   Settings,
   ShieldCheck,
+  Trash2,
   Users,
 } from 'lucide-react';
 import {
@@ -30,7 +33,10 @@ interface PptkExecutiveModuleProps {
   photos: DocumentationPhoto[];
   auditLogs: AuditLogEntry[];
   onUpdateConfig: (newConfig: Partial<ActivityConfig>) => Promise<void>;
+  onResetOfficialMode: () => Promise<void>;
+  onRestoreDemoData: () => Promise<void>;
   onOpenDocumentPreview: (doc: PrintableDocumentPayload) => void;
+  onOpenBlueprint: () => void;
 }
 
 export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
@@ -40,15 +46,31 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
   photos,
   auditLogs,
   onUpdateConfig,
+  onResetOfficialMode,
+  onRestoreDemoData,
   onOpenDocumentPreview,
+  onOpenBlueprint,
 }) => {
   const [showSbmEditor, setShowSbmEditor] = useState(false);
+  const [confirmClearData, setConfirmClearData] = useState(false);
+
+  const [instansiPenyelenggara, setInstansiPenyelenggara] = useState(
+    config.instansiPenyelenggara
+  );
   const [namaKegiatan, setNamaKegiatan] = useState(config.namaKegiatan);
+  const [lokasiKegiatan, setLokasiKegiatan] = useState(config.lokasiKegiatan);
+  const [tanggalMulai, setTanggalMulai] = useState(config.tanggalMulai);
+  const [tanggalSelesai, setTanggalSelesai] = useState(config.tanggalSelesai);
+  const [jumlahHariKegiatan, setJumlahHariKegiatan] = useState(
+    config.jumlahHariKegiatan
+  );
   const [nomorDpa, setNomorDpa] = useState(config.nomorDpa);
   const [tarifSbm, setTarifSbm] = useState(config.tarifUangHarianSbm);
   const [plafonTransport, setPlafonTransport] = useState(config.plafonTransportLokal);
   const [namaPptk, setNamaPptk] = useState(config.namaPptk);
+  const [nipPptk, setNipPptk] = useState(config.nipPptk);
   const [namaBendahara, setNamaBendahara] = useState(config.namaBendahara);
+  const [nipBendahara, setNipBendahara] = useState(config.nipBendahara);
   const [toast, setToast] = useState<string | null>(null);
 
   // Perhitungan Real-Time Serapan Anggaran DPA
@@ -87,18 +109,32 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     await onUpdateConfig({
+      instansiPenyelenggara,
       namaKegiatan,
+      lokasiKegiatan,
+      tanggalMulai,
+      tanggalSelesai,
+      jumlahHariKegiatan: Number(jumlahHariKegiatan) || 3,
       nomorDpa,
       tarifUangHarianSbm: Number(tarifSbm),
       plafonTransportLokal: Number(plafonTransport),
       namaPptk,
+      nipPptk,
       namaBendahara,
+      nipBendahara,
     });
     setShowSbmEditor(false);
-    setToast(
-      'Parameter Kegiatan & Standar Biaya Masukan (SBM) berhasil diperbarui secara global.'
-    );
+    setToast('Pengaturan Kegiatan Resmi & Standar Biaya Masukan (SBM) berhasil disimpan.');
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleConfirmResetOfficial = async () => {
+    await onResetOfficialMode();
+    setConfirmClearData(false);
+    setToast(
+      'Data contoh berhasil dibersihkan! Sistem kini mulai dari 0 peserta dan siap digunakan untuk kegiatan resmi.'
+    );
+    setTimeout(() => setToast(null), 5000);
   };
 
   return (
@@ -109,16 +145,16 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
         </div>
       )}
 
-      {/* Header Executive Dashboard & Generator Master Laporan Akhir PDF */}
+      {/* Header Executive Dashboard & Pengaturan Kegiatan Resmi */}
       <div className="rounded-xl border border-slate-200 bg-white p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold text-blue-700">
               <BarChart3 className="h-4 w-4" />
-              <span>MODUL E — PPTK / EXECUTIVE DASHBOARD &amp; MASTER REPORT</span>
+              <span>PANEL PPTK &amp; PENGATURAN KEGIATAN RESMI</span>
             </div>
             <h1 className="mt-1 text-xl font-bold text-slate-900">
-              Monitoring Eksekutif Kehadiran, Serapan Anggaran DPA &amp; Audit BPK
+              Monitoring Kehadiran, Serapan Anggaran DPA &amp; Pengaturan Kegiatan
             </h1>
             <p className="mt-0.5 text-xs text-slate-600">
               DIPA/DPA: <span className="font-mono font-semibold">{config.nomorDpa}</span>{' '}
@@ -126,15 +162,25 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setShowSbmEditor(!showSbmEditor)}
-              className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+              className="flex min-h-[42px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
             >
               <Settings className="h-4 w-4" />
-              <span>Pengaturan Tarif SBM &amp; DPA</span>
+              <span>Pengaturan Kegiatan &amp; SBM</span>
             </button>
+
+            <button
+              type="button"
+              onClick={onOpenBlueprint}
+              className="flex min-h-[42px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+            >
+              <Code2 className="h-4 w-4 text-blue-700" />
+              <span>Integrasi Google Drive &amp; Sheets</span>
+            </button>
+
             <button
               type="button"
               onClick={() =>
@@ -148,35 +194,150 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
                   )
                 )
               }
-              className="flex min-h-[44px] items-center gap-2 rounded-lg bg-blue-700 px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 transition-colors whitespace-nowrap shrink-0"
+              className="flex min-h-[42px] items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-600 transition-colors whitespace-nowrap shrink-0"
             >
               <Printer className="h-4 w-4" />
-              <span>Master Laporan Akhir Kegiatan (PDF Siap Jilid)</span>
+              <span>Cetak Master Laporan Akhir (PDF)</span>
             </button>
           </div>
         </div>
 
-        {/* Panel Editor Parameter SBM & Kegiatan */}
+        {/* Bar Persiapan Kegiatan Resmi (Kosongkan Data Contoh vs Pulihkan Contoh) */}
+        <div className="mt-4 flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5 sm:flex-row sm:items-center">
+          <div className="text-xs text-slate-700">
+            <strong>Status Data Peserta Saat Ini: {participants.length} Peserta.</strong>{' '}
+            <span>
+              Untuk memulai kegiatan resmi baru, Anda dapat menghapus 3 data peserta contoh
+              bawaan agar daftar peserta mulai dari 0 (kosong).
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {participants.length > 0 ? (
+              !confirmClearData ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearData(true)}
+                  className="flex min-h-[38px] items-center gap-1.5 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Kosongkan Data Contoh (Siap Kegiatan Resmi)</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleConfirmResetOfficial}
+                    className="min-h-[38px] rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
+                  >
+                    Ya, Kosongkan Sekarang
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearData(false)}
+                    className="min-h-[38px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+                  >
+                    Batal
+                  </button>
+                </div>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={async () => {
+                  await onRestoreDemoData();
+                  setToast('Data contoh berhasil ditampilkan kembali.');
+                  setTimeout(() => setToast(null), 3500);
+                }}
+                className="flex min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Tampilkan Kembali Data Contoh</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Panel Editor Parameter Kegiatan Resmi & SBM */}
         {showSbmEditor && (
           <form
             onSubmit={handleSaveConfig}
-            className="mt-5 border-t border-slate-200 pt-4"
+            className="mt-5 border-t border-slate-200 pt-4 space-y-4"
           >
             <div className="text-xs font-bold text-slate-900">
-              Konfigurasi Dinamis Standar Biaya Masukan (PMK SBM) &amp; Pejabat Penandatangan
+              Pengaturan Identitas Kegiatan Resmi, Pejabat Penandatangan &amp; Tarif SBM
             </div>
-            <div className="mt-3 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-              <div className="sm:col-span-2">
+            <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+              <div>
                 <label className="block text-xs font-semibold text-slate-700">
-                  Nama Kegiatan Kedinasan
+                  Instansi Penyelenggara
                 </label>
                 <input
                   type="text"
+                  required
+                  value={instansiPenyelenggara}
+                  onChange={(e) => setInstansiPenyelenggara(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Nama Kegiatan Kedinasan Resmi
+                </label>
+                <input
+                  type="text"
+                  required
                   value={namaKegiatan}
                   onChange={(e) => setNamaKegiatan(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
                 />
               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">
+                  Tempat / Lokasi Kegiatan
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={lokasiKegiatan}
+                  onChange={(e) => setLokasiKegiatan(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">
+                  Tanggal Mulai &amp; Selesai
+                </label>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    type="date"
+                    value={tanggalMulai}
+                    onChange={(e) => setTanggalMulai(e.target.value)}
+                    className="w-1/2 rounded-lg border border-slate-300 px-2 py-2 font-mono text-xs"
+                  />
+                  <input
+                    type="date"
+                    value={tanggalSelesai}
+                    onChange={(e) => setTanggalSelesai(e.target.value)}
+                    className="w-1/2 rounded-lg border border-slate-300 px-2 py-2 font-mono text-xs"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700">
+                  Jumlah Hari Kegiatan
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={14}
+                  value={jumlahHariKegiatan}
+                  onChange={(e) => setJumlahHariKegiatan(Number(e.target.value) || 1)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs font-bold"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700">
                   Nomor DIPA / DPA
@@ -212,31 +373,65 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs font-bold"
                 />
               </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700">
-                  Nama Pejabat PPTK
+                  Nama &amp; NIP PPTK
                 </label>
-                <input
-                  type="text"
-                  value={namaPptk}
-                  onChange={(e) => setNamaPptk(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"
-                />
+                <div className="mt-1 flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Nama PPTK"
+                    value={namaPptk}
+                    onChange={(e) => setNamaPptk(e.target.value)}
+                    className="w-1/2 rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                  />
+                  <input
+                    type="text"
+                    placeholder="NIP PPTK"
+                    value={nipPptk}
+                    onChange={(e) => setNipPptk(e.target.value)}
+                    className="w-1/2 rounded-lg border border-slate-300 px-2.5 py-2 font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Nama &amp; NIP Bendahara Pengeluaran
+                </label>
+                <div className="mt-1 flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Nama Bendahara"
+                    value={namaBendahara}
+                    onChange={(e) => setNamaBendahara(e.target.value)}
+                    className="w-1/2 rounded-lg border border-slate-300 px-2.5 py-2 text-xs"
+                  />
+                  <input
+                    type="text"
+                    placeholder="NIP Bendahara"
+                    value={nipBendahara}
+                    onChange={(e) => setNipBendahara(e.target.value)}
+                    className="w-1/2 rounded-lg border border-slate-300 px-2.5 py-2 font-mono text-xs"
+                  />
+                </div>
               </div>
             </div>
-            <div className="mt-3 flex justify-end gap-2">
+
+            <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowSbmEditor(false)}
                 className="rounded-lg border border-slate-300 px-3.5 py-2 text-xs font-medium text-slate-700"
               >
-                Batal
+                Tutup
               </button>
               <button
                 type="submit"
                 className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
               >
-                Terapkan Perubahan SBM
+                Simpan Pengaturan Kegiatan Resmi
               </button>
             </div>
           </form>
@@ -301,7 +496,6 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
 
       {/* Main Split: Budget Absorption Table & Attendance Barometer */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Left: Budget Tracking (Pagu DPA vs Realisasi Penyerapan) */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 lg:col-span-7">
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div>
@@ -375,7 +569,6 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
           </div>
         </div>
 
-        {/* Right: Barometer Kehadiran Harian & Struktur Folder Google Drive Panitia */}
         <div className="space-y-6 lg:col-span-5">
           {/* Barometer Kehadiran Peserta Real-Time */}
           <div className="rounded-xl border border-slate-200 bg-white p-5">
@@ -392,7 +585,8 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
             </div>
 
             <div className="mt-4 space-y-3">
-              {[1, 2, 3].map((dayNum) => {
+              {Array.from({ length: config.jumlahHariKegiatan }, (_, idx) => {
+                const dayNum = idx + 1;
                 const count = participants.filter((p) =>
                   p.attendance.some((a) => a.dayIndex === dayNum)
                 ).length;
@@ -424,7 +618,7 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
           <div className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
               <FolderTree className="h-4 w-4 text-blue-700" />
-              <span>Struktur Folder Terpusat Google Drive Panitia (Service Account)</span>
+              <span>Struktur Folder Terpusat Google Drive Panitia</span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
               Seluruh dokumen tersimpan di bawah akun resmi panitia, bukan di Drive
@@ -434,27 +628,33 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
               <div className="text-blue-400 font-bold">
                 /Panitia_SIM_KANTOR_{config.tahunAnggaran}/
               </div>
-              {participants.map((p) => (
-                <div key={p.id} className="pl-3">
-                  <div className="text-emerald-400">
-                    ├── /{p.driveFolderName}/
-                  </div>
-                  <div className="pl-5 text-slate-400">
-                    {p.documents.suratTugas && (
-                      <div>│   ├── {p.documents.suratTugas.fileName}</div>
-                    )}
-                    {p.documents.sppdVisum && (
-                      <div>│   ├── {p.documents.sppdVisum.fileName}</div>
-                    )}
-                    {p.documents.buktiTransport && (
-                      <div>│   ├── {p.documents.buktiTransport.fileName}</div>
-                    )}
-                    {p.documents.spprGenerated && (
-                      <div>│   └── {p.documents.spprGenerated.nomorSppr}.pdf</div>
-                    )}
-                  </div>
+              {participants.length === 0 ? (
+                <div className="pl-3 text-slate-400">
+                  └── (Siap menerima folder peserta baru saat peserta mengunggah berkas)
                 </div>
-              ))}
+              ) : (
+                participants.map((p) => (
+                  <div key={p.id} className="pl-3">
+                    <div className="text-emerald-400">
+                      ├── /{p.driveFolderName}/
+                    </div>
+                    <div className="pl-5 text-slate-400">
+                      {p.documents.suratTugas && (
+                        <div>│   ├── {p.documents.suratTugas.fileName}</div>
+                      )}
+                      {p.documents.sppdVisum && (
+                        <div>│   ├── {p.documents.sppdVisum.fileName}</div>
+                      )}
+                      {p.documents.buktiTransport && (
+                        <div>│   ├── {p.documents.buktiTransport.fileName}</div>
+                      )}
+                      {p.documents.spprGenerated && (
+                        <div>│   └── {p.documents.spprGenerated.nomorSppr}.pdf</div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -466,10 +666,10 @@ export const PptkExecutiveModule: React.FC<PptkExecutiveModuleProps> = ({
           <div>
             <div className="flex items-center gap-2 text-xs font-bold text-emerald-800">
               <ShieldCheck className="h-4 w-4" />
-              <span>100% AUDIT-READY BPK / INSPEKTORAT</span>
+              <span>JEJAK AUDIT BPK / INSPEKTORAT</span>
             </div>
             <h2 className="mt-0.5 text-base font-bold text-slate-900">
-              Log Jejak Audit Aktivitas Sistem (Mandiri, Proxy Panitia &amp; Verifikator)
+              Log Aktivitas Sistem (Peserta Mandiri, Proxy Panitia &amp; Verifikator)
             </h2>
           </div>
           <span className="font-mono text-xs text-slate-500">

@@ -1,0 +1,595 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // PRIMITIVE HELPERS
+    // =========================================================================
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        (request.auth.token.email is string &&
+          request.auth.token.email.size() <= 200 &&
+          request.auth.token.email == 'brcloud070783@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // =========================================================================
+    // ENTITY VALIDATION BLUEPRINTS
+    // =========================================================================
+    function isValidAdminRecord(data) {
+      return data.keys().hasAll(['uid', 'email', 'pinCode', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'pinCode', 'createdAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.uid == request.auth.uid &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+        data.pinCode is string && data.pinCode.size() == 4 && data.pinCode == '2025' &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidActivityConfigDoc(data) {
+      return data.keys().hasAll([
+        'instansiPenyelenggara',
+        'satuanKerja',
+        'namaKegiatan',
+        'lokasiKegiatan',
+        'tanggalMulai',
+        'tanggalSelesai',
+        'jumlahHariKegiatan',
+        'nomorDpa',
+        'tahunAnggaran',
+        'kodeMak',
+        'paguDpaTotal',
+        'paguUangHarian',
+        'paguTransportPeserta',
+        'paguHonorNarasumber',
+        'paguKonsumsiOperasional',
+        'realisasiKonsumsiOperasional',
+        'tarifUangHarianSbm',
+        'plafonTransportLokal',
+        'namaPptk',
+        'nipPptk',
+        'namaBendahara',
+        'nipBendahara',
+        'updatedByUid',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'instansiPenyelenggara',
+        'satuanKerja',
+        'namaKegiatan',
+        'lokasiKegiatan',
+        'tanggalMulai',
+        'tanggalSelesai',
+        'jumlahHariKegiatan',
+        'nomorDpa',
+        'tahunAnggaran',
+        'kodeMak',
+        'paguDpaTotal',
+        'paguUangHarian',
+        'paguTransportPeserta',
+        'paguHonorNarasumber',
+        'paguKonsumsiOperasional',
+        'realisasiKonsumsiOperasional',
+        'tarifUangHarianSbm',
+        'plafonTransportLokal',
+        'namaPptk',
+        'nipPptk',
+        'namaBendahara',
+        'nipBendahara',
+        'updatedByUid',
+        'updatedAt'
+      ]) &&
+      data.instansiPenyelenggara is string && data.instansiPenyelenggara.size() >= 1 && data.instansiPenyelenggara.size() <= 200 &&
+      data.satuanKerja is string && data.satuanKerja.size() >= 1 && data.satuanKerja.size() <= 200 &&
+      data.namaKegiatan is string && data.namaKegiatan.size() >= 1 && data.namaKegiatan.size() <= 300 &&
+      data.lokasiKegiatan is string && data.lokasiKegiatan.size() >= 1 && data.lokasiKegiatan.size() <= 200 &&
+      data.tanggalMulai is string && data.tanggalMulai.size() >= 1 && data.tanggalMulai.size() <= 30 &&
+      data.tanggalSelesai is string && data.tanggalSelesai.size() >= 1 && data.tanggalSelesai.size() <= 30 &&
+      data.jumlahHariKegiatan is number && data.jumlahHariKegiatan >= 1 && data.jumlahHariKegiatan <= 30 &&
+      data.nomorDpa is string && data.nomorDpa.size() >= 1 && data.nomorDpa.size() <= 120 &&
+      data.tahunAnggaran is number && data.tahunAnggaran >= 2020 && data.tahunAnggaran <= 2100 &&
+      data.kodeMak is string && data.kodeMak.size() >= 1 && data.kodeMak.size() <= 120 &&
+      data.paguDpaTotal is number && data.paguDpaTotal >= 0 &&
+      data.paguUangHarian is number && data.paguUangHarian >= 0 &&
+      data.paguTransportPeserta is number && data.paguTransportPeserta >= 0 &&
+      data.paguHonorNarasumber is number && data.paguHonorNarasumber >= 0 &&
+      data.paguKonsumsiOperasional is number && data.paguKonsumsiOperasional >= 0 &&
+      data.realisasiKonsumsiOperasional is number && data.realisasiKonsumsiOperasional >= 0 &&
+      data.tarifUangHarianSbm is number && data.tarifUangHarianSbm >= 0 &&
+      data.plafonTransportLokal is number && data.plafonTransportLokal >= 0 &&
+      data.namaPptk is string && data.namaPptk.size() >= 1 && data.namaPptk.size() <= 150 &&
+      data.nipPptk is string && data.nipPptk.size() >= 1 && data.nipPptk.size() <= 50 &&
+      data.namaBendahara is string && data.namaBendahara.size() >= 1 && data.namaBendahara.size() <= 150 &&
+      data.nipBendahara is string && data.nipBendahara.size() >= 1 && data.nipBendahara.size() <= 50 &&
+      data.updatedByUid is string && data.updatedByUid.size() >= 1 && data.updatedByUid.size() <= 128 &&
+      data.updatedByUid == request.auth.uid &&
+      data.updatedAt is timestamp;
+    }
+
+    function isValidParticipantDoc(data) {
+      return data.keys().hasAll([
+        'id',
+        'ownerUid',
+        'nama',
+        'email',
+        'nip',
+        'pangkatGolongan',
+        'jabatan',
+        'instansi',
+        'kabupatenKota',
+        'noHp',
+        'namaBank',
+        'noRekening',
+        'statusBerkas',
+        'inputMode',
+        'driveFolderId',
+        'driveFolderName',
+        'driveFolderUrl',
+        'attendance',
+        'documents',
+        'spprItems',
+        'verification',
+        'updatedAt',
+        'serverUpdatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id',
+        'ownerUid',
+        'nama',
+        'email',
+        'nip',
+        'pangkatGolongan',
+        'jabatan',
+        'instansi',
+        'kabupatenKota',
+        'noHp',
+        'namaBank',
+        'noRekening',
+        'statusBerkas',
+        'inputMode',
+        'proxyOfficerName',
+        'proxyReason',
+        'driveFolderId',
+        'driveFolderName',
+        'driveFolderUrl',
+        'attendance',
+        'documents',
+        'spprItems',
+        'verification',
+        'updatedAt',
+        'serverUpdatedAt'
+      ]) &&
+      data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 && data.ownerUid.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.nama is string && data.nama.size() >= 1 && data.nama.size() <= 200 &&
+      data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+      data.nip is string && data.nip.size() >= 1 && data.nip.size() <= 50 &&
+      data.pangkatGolongan is string && data.pangkatGolongan.size() >= 1 && data.pangkatGolongan.size() <= 50 &&
+      data.jabatan is string && data.jabatan.size() >= 1 && data.jabatan.size() <= 150 &&
+      data.instansi is string && data.instansi.size() >= 1 && data.instansi.size() <= 200 &&
+      data.kabupatenKota is string && data.kabupatenKota.size() >= 1 && data.kabupatenKota.size() <= 150 &&
+      data.noHp is string && data.noHp.size() >= 1 && data.noHp.size() <= 40 &&
+      data.namaBank is string && data.namaBank.size() >= 1 && data.namaBank.size() <= 60 &&
+      data.noRekening is string && data.noRekening.size() >= 1 && data.noRekening.size() <= 80 &&
+      data.statusBerkas is string && data.statusBerkas.size() <= 40 &&
+      data.statusBerkas in ['BELUM_LENGKAP', 'MENUNGGU_VERIFIKASI', 'TERVERIFIKASI', 'PERLU_REVISI'] &&
+      data.inputMode is string && data.inputMode.size() <= 40 &&
+      data.inputMode in ['MANDIRI', 'PROXY_PANITIA'] &&
+      (!('proxyOfficerName' in data) || (data.proxyOfficerName is string && data.proxyOfficerName.size() <= 150)) &&
+      (!('proxyReason' in data) || (data.proxyReason is string && data.proxyReason.size() <= 300)) &&
+      data.driveFolderId is string && data.driveFolderId.size() >= 1 && data.driveFolderId.size() <= 150 &&
+      data.driveFolderName is string && data.driveFolderName.size() >= 1 && data.driveFolderName.size() <= 250 &&
+      data.driveFolderUrl is string && data.driveFolderUrl.size() >= 1 && data.driveFolderUrl.size() <= 400 &&
+      data.attendance is list && data.attendance.size() <= 14 &&
+      (data.attendance.size() == 0 || data.attendance[0] is map) &&
+      data.documents is map &&
+      data.spprItems is list && data.spprItems.size() <= 20 &&
+      (data.spprItems.size() == 0 || data.spprItems[0] is map) &&
+      data.verification is map &&
+      data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 60 &&
+      data.serverUpdatedAt is timestamp;
+    }
+
+    function isValidSpeakerDoc(data) {
+      return data.keys().hasAll([
+        'id',
+        'nama',
+        'peran',
+        'instansi',
+        'golongan',
+        'npwp',
+        'hasNpwp',
+        'namaBank',
+        'noRekening',
+        'materiJudul',
+        'jumlahJP',
+        'tarifPerJP',
+        'bruto',
+        'tarifPph21Persen',
+        'potonganPph21',
+        'netto',
+        'noKuitansi',
+        'statusBayar',
+        'tanggalKegiatan',
+        'updatedByUid',
+        'serverUpdatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id',
+        'nama',
+        'peran',
+        'instansi',
+        'golongan',
+        'npwp',
+        'hasNpwp',
+        'namaBank',
+        'noRekening',
+        'materiJudul',
+        'jumlahJP',
+        'tarifPerJP',
+        'bruto',
+        'tarifPph21Persen',
+        'potonganPph21',
+        'netto',
+        'noKuitansi',
+        'statusBayar',
+        'tanggalKegiatan',
+        'updatedByUid',
+        'serverUpdatedAt'
+      ]) &&
+      data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.nama is string && data.nama.size() >= 1 && data.nama.size() <= 200 &&
+      data.peran is string && data.peran.size() >= 1 && data.peran.size() <= 60 &&
+      data.instansi is string && data.instansi.size() >= 1 && data.instansi.size() <= 200 &&
+      data.golongan is string && data.golongan.size() >= 1 && data.golongan.size() <= 40 &&
+      data.npwp is string && data.npwp.size() >= 1 && data.npwp.size() <= 60 &&
+      data.hasNpwp is bool &&
+      data.namaBank is string && data.namaBank.size() >= 1 && data.namaBank.size() <= 60 &&
+      data.noRekening is string && data.noRekening.size() >= 1 && data.noRekening.size() <= 80 &&
+      data.materiJudul is string && data.materiJudul.size() >= 1 && data.materiJudul.size() <= 300 &&
+      data.jumlahJP is number && data.jumlahJP >= 1 && data.jumlahJP <= 40 &&
+      data.tarifPerJP is number && data.tarifPerJP >= 0 &&
+      data.bruto is number && data.bruto >= 0 &&
+      data.tarifPph21Persen is number && data.tarifPph21Persen >= 0 &&
+      data.potonganPph21 is number && data.potonganPph21 >= 0 &&
+      data.netto is number && data.netto >= 0 &&
+      data.noKuitansi is string && data.noKuitansi.size() >= 1 && data.noKuitansi.size() <= 100 &&
+      data.statusBayar is string && data.statusBayar.size() >= 1 && data.statusBayar.size() <= 40 &&
+      data.tanggalKegiatan is string && data.tanggalKegiatan.size() >= 1 && data.tanggalKegiatan.size() <= 40 &&
+      data.updatedByUid is string && data.updatedByUid.size() >= 1 && data.updatedByUid.size() <= 128 &&
+      data.updatedByUid == request.auth.uid &&
+      data.serverUpdatedAt is timestamp;
+    }
+
+    function isValidPhotoDoc(data) {
+      return data.keys().hasAll([
+        'id',
+        'kategori',
+        'judul',
+        'caption',
+        'hariKe',
+        'tanggal',
+        'timestamp',
+        'uploader',
+        'driveFileId',
+        'originalSizeKB',
+        'compressedSizeKB',
+        'imageUrl',
+        'visibility',
+        'updatedByUid',
+        'serverUpdatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id',
+        'kategori',
+        'judul',
+        'caption',
+        'hariKe',
+        'tanggal',
+        'timestamp',
+        'uploader',
+        'driveFileId',
+        'originalSizeKB',
+        'compressedSizeKB',
+        'imageUrl',
+        'visibility',
+        'updatedByUid',
+        'serverUpdatedAt'
+      ]) &&
+      data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.kategori is string && data.kategori.size() >= 1 && data.kategori.size() <= 100 &&
+      data.judul is string && data.judul.size() >= 1 && data.judul.size() <= 200 &&
+      data.caption is string && data.caption.size() >= 1 && data.caption.size() <= 500 &&
+      data.hariKe is number && data.hariKe >= 1 && data.hariKe <= 30 &&
+      data.tanggal is string && data.tanggal.size() >= 1 && data.tanggal.size() <= 40 &&
+      data.timestamp is string && data.timestamp.size() >= 1 && data.timestamp.size() <= 60 &&
+      data.uploader is string && data.uploader.size() >= 1 && data.uploader.size() <= 150 &&
+      data.driveFileId is string && data.driveFileId.size() >= 1 && data.driveFileId.size() <= 150 &&
+      data.originalSizeKB is number && data.originalSizeKB >= 0 &&
+      data.compressedSizeKB is number && data.compressedSizeKB >= 0 &&
+      data.imageUrl is string && data.imageUrl.size() >= 1 && data.imageUrl.size() <= 700000 &&
+      data.visibility is string && data.visibility.size() <= 20 && data.visibility == 'PUBLIC' &&
+      data.updatedByUid is string && data.updatedByUid.size() >= 1 && data.updatedByUid.size() <= 128 &&
+      data.updatedByUid == request.auth.uid &&
+      data.serverUpdatedAt is timestamp;
+    }
+
+    function isValidAuditLogDoc(data) {
+      return data.keys().hasAll([
+        'id',
+        'actorUid',
+        'timestamp',
+        'actorName',
+        'actorRole',
+        'actionType',
+        'targetName',
+        'details',
+        'isFlaggedProxy',
+        'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'id',
+        'actorUid',
+        'timestamp',
+        'actorName',
+        'actorRole',
+        'actionType',
+        'targetName',
+        'details',
+        'isFlaggedProxy',
+        'createdAt'
+      ]) &&
+      data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.actorUid is string && data.actorUid.size() >= 1 && data.actorUid.size() <= 128 && data.actorUid.matches('^[a-zA-Z0-9_\\-]+$') &&
+      data.actorUid == request.auth.uid &&
+      data.timestamp is string && data.timestamp.size() >= 1 && data.timestamp.size() <= 60 &&
+      data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 150 &&
+      data.actorRole is string && data.actorRole.size() <= 40 &&
+      data.actorRole in ['PESERTA', 'PANITIA_PROXY', 'VERIFIKATOR_SPJ', 'DOKUMENTASI', 'PPTK'] &&
+      data.actionType is string && data.actionType.size() >= 1 && data.actionType.size() <= 100 &&
+      data.targetName is string && data.targetName.size() >= 1 && data.targetName.size() <= 200 &&
+      data.details is string && data.details.size() >= 1 && data.details.size() <= 600 &&
+      data.isFlaggedProxy is bool &&
+      data.createdAt is timestamp;
+    }
+
+    // =========================================================================
+    // 1. COLLECTION: /admins/{adminId}
+    // =========================================================================
+    match /admins/{adminId} {
+      allow get: if isVerifiedUser() && isValidId(adminId) && (adminId == request.auth.uid || isAdmin());
+      allow list: if false;
+      allow create: if isVerifiedUser() &&
+        isValidId(adminId) &&
+        adminId == request.auth.uid &&
+        isValidAdminRecord(incoming()) &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(adminId) && isAdmin();
+    }
+
+    // =========================================================================
+    // 2. COLLECTION: /activityConfigs/{configId}
+    // =========================================================================
+    match /activityConfigs/{configId} {
+      allow get: if isSignedIn() && isValidId(configId);
+      allow list: if false;
+      allow create: if isVerifiedUser() &&
+        isValidId(configId) &&
+        isValidActivityConfigDoc(incoming()) &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isVerifiedUser() &&
+        isValidId(configId) &&
+        isValidActivityConfigDoc(incoming()) &&
+        incoming().updatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'instansiPenyelenggara',
+          'satuanKerja',
+          'namaKegiatan',
+          'lokasiKegiatan',
+          'tanggalMulai',
+          'tanggalSelesai',
+          'jumlahHariKegiatan',
+          'nomorDpa',
+          'tahunAnggaran',
+          'kodeMak',
+          'paguDpaTotal',
+          'paguUangHarian',
+          'paguTransportPeserta',
+          'paguHonorNarasumber',
+          'paguKonsumsiOperasional',
+          'realisasiKonsumsiOperasional',
+          'tarifUangHarianSbm',
+          'plafonTransportLokal',
+          'namaPptk',
+          'nipPptk',
+          'namaBendahara',
+          'nipBendahara',
+          'updatedByUid',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // 3. COLLECTION: /participants/{participantId} (PII Isolated)
+    // =========================================================================
+    match /participants/{participantId} {
+      allow get: if isVerifiedUser() &&
+        isValidId(participantId) &&
+        (existing().ownerUid == request.auth.uid || isAdmin());
+
+      allow list: if isVerifiedUser() &&
+        (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser() &&
+        isValidId(participantId) &&
+        isValidParticipantDoc(incoming()) &&
+        incoming().id == participantId &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().serverUpdatedAt == request.time &&
+        (
+          (incoming().statusBerkas in ['BELUM_LENGKAP', 'MENUNGGU_VERIFIKASI']) ||
+          isAdmin()
+        );
+
+      allow update: if isVerifiedUser() &&
+        isValidId(participantId) &&
+        isValidParticipantDoc(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().serverUpdatedAt == request.time && (
+          isAdmin() ||
+          (
+            existing().ownerUid == request.auth.uid &&
+            existing().statusBerkas != 'TERVERIFIKASI' &&
+            incoming().statusBerkas in ['BELUM_LENGKAP', 'MENUNGGU_VERIFIKASI'] &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'nama',
+              'email',
+              'nip',
+              'pangkatGolongan',
+              'jabatan',
+              'instansi',
+              'kabupatenKota',
+              'noHp',
+              'namaBank',
+              'noRekening',
+              'statusBerkas',
+              'driveFolderName',
+              'attendance',
+              'documents',
+              'spprItems',
+              'verification',
+              'updatedAt',
+              'serverUpdatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(participantId) && isAdmin();
+    }
+
+    // =========================================================================
+    // 4. COLLECTION: /speakers/{speakerId} (Financial PII Isolated to Admin)
+    // =========================================================================
+    match /speakers/{speakerId} {
+      allow get: if isVerifiedUser() && isValidId(speakerId) && isAdmin();
+      allow list: if isVerifiedUser() && isAdmin() && resource.data.id is string;
+      allow create: if isVerifiedUser() &&
+        isValidId(speakerId) &&
+        isValidSpeakerDoc(incoming()) &&
+        incoming().id == speakerId &&
+        incoming().serverUpdatedAt == request.time &&
+        isAdmin();
+      allow update: if isVerifiedUser() &&
+        isValidId(speakerId) &&
+        isValidSpeakerDoc(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().serverUpdatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'nama',
+          'peran',
+          'instansi',
+          'golongan',
+          'npwp',
+          'hasNpwp',
+          'namaBank',
+          'noRekening',
+          'materiJudul',
+          'jumlahJP',
+          'tarifPerJP',
+          'bruto',
+          'tarifPph21Persen',
+          'potonganPph21',
+          'netto',
+          'noKuitansi',
+          'statusBayar',
+          'tanggalKegiatan',
+          'updatedByUid',
+          'serverUpdatedAt'
+        ]);
+      allow delete: if isVerifiedUser() && isValidId(speakerId) && isAdmin();
+    }
+
+    // =========================================================================
+    // 5. COLLECTION: /photos/{photoId}
+    // =========================================================================
+    match /photos/{photoId} {
+      allow get: if isSignedIn() && isValidId(photoId) && (existing().visibility == 'PUBLIC' || isAdmin());
+      allow list: if isSignedIn() && (resource.data.visibility == 'PUBLIC' || isAdmin());
+      allow create: if isVerifiedUser() &&
+        isValidId(photoId) &&
+        isValidPhotoDoc(incoming()) &&
+        incoming().id == photoId &&
+        incoming().serverUpdatedAt == request.time &&
+        isAdmin();
+      allow update: if isVerifiedUser() &&
+        isValidId(photoId) &&
+        isValidPhotoDoc(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().serverUpdatedAt == request.time &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'kategori',
+          'judul',
+          'caption',
+          'hariKe',
+          'tanggal',
+          'timestamp',
+          'uploader',
+          'driveFileId',
+          'originalSizeKB',
+          'compressedSizeKB',
+          'imageUrl',
+          'visibility',
+          'updatedByUid',
+          'serverUpdatedAt'
+        ]);
+      allow delete: if isVerifiedUser() && isValidId(photoId) && isAdmin();
+    }
+
+    // =========================================================================
+    // 6. COLLECTION: /auditLogs/{logId} (Immutable BPK Audit Trail)
+    // =========================================================================
+    match /auditLogs/{logId} {
+      allow get: if isVerifiedUser() && isValidId(logId) && isAdmin();
+      allow list: if isVerifiedUser() && isAdmin() && resource.data.actorUid is string;
+      allow create: if isVerifiedUser() &&
+        isValidId(logId) &&
+        isValidAuditLogDoc(incoming()) &&
+        incoming().id == logId &&
+        incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+  }
+}

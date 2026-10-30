@@ -1,0 +1,564 @@
+{
+  "entities": {
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Committee member or verifier authorized to manage official activity data and SPJ verification.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the committee member."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200,
+          "description": "Verified Google email address of the committee member."
+        },
+        "pinCode": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Committee access PIN verification code."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when admin access was granted."
+        }
+      },
+      "required": ["uid", "email", "pinCode", "createdAt"]
+    },
+    "ActivityConfigDoc": {
+      "title": "ActivityConfigDoc",
+      "description": "Global configuration and SBM parameters for the official government activity.",
+      "type": "object",
+      "properties": {
+        "instansiPenyelenggara": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "satuanKerja": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "namaKegiatan": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "lokasiKegiatan": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "tanggalMulai": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "tanggalSelesai": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "jumlahHariKegiatan": {
+          "type": "number"
+        },
+        "nomorDpa": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "tahunAnggaran": {
+          "type": "number"
+        },
+        "kodeMak": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "paguDpaTotal": {
+          "type": "number"
+        },
+        "paguUangHarian": {
+          "type": "number"
+        },
+        "paguTransportPeserta": {
+          "type": "number"
+        },
+        "paguHonorNarasumber": {
+          "type": "number"
+        },
+        "paguKonsumsiOperasional": {
+          "type": "number"
+        },
+        "realisasiKonsumsiOperasional": {
+          "type": "number"
+        },
+        "tarifUangHarianSbm": {
+          "type": "number"
+        },
+        "plafonTransportLokal": {
+          "type": "number"
+        },
+        "namaPptk": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "nipPptk": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "namaBendahara": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "nipBendahara": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "updatedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "instansiPenyelenggara",
+        "satuanKerja",
+        "namaKegiatan",
+        "lokasiKegiatan",
+        "tanggalMulai",
+        "tanggalSelesai",
+        "jumlahHariKegiatan",
+        "nomorDpa",
+        "tahunAnggaran",
+        "kodeMak",
+        "paguDpaTotal",
+        "paguUangHarian",
+        "paguTransportPeserta",
+        "paguHonorNarasumber",
+        "paguKonsumsiOperasional",
+        "realisasiKonsumsiOperasional",
+        "tarifUangHarianSbm",
+        "plafonTransportLokal",
+        "namaPptk",
+        "nipPptk",
+        "namaBendahara",
+        "nipBendahara",
+        "updatedByUid",
+        "updatedAt"
+      ]
+    },
+    "ParticipantDoc": {
+      "title": "ParticipantDoc",
+      "description": "Participant registration, attendance, uploaded SPJ documents, SPPR items, and verification record.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "nama": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200
+        },
+        "nip": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "pangkatGolongan": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "jabatan": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "instansi": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "kabupatenKota": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "noHp": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "namaBank": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "noRekening": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "statusBerkas": {
+          "type": "string",
+          "enum": ["BELUM_LENGKAP", "MENUNGGU_VERIFIKASI", "TERVERIFIKASI", "PERLU_REVISI"],
+          "maxLength": 40
+        },
+        "inputMode": {
+          "type": "string",
+          "enum": ["MANDIRI", "PROXY_PANITIA"],
+          "maxLength": 40
+        },
+        "proxyOfficerName": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "proxyReason": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "driveFolderId": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "driveFolderName": {
+          "type": "string",
+          "maxLength": 250
+        },
+        "driveFolderUrl": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "attendance": {
+          "type": "array"
+        },
+        "documents": {
+          "type": "object"
+        },
+        "spprItems": {
+          "type": "array"
+        },
+        "verification": {
+          "type": "object"
+        },
+        "updatedAt": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "serverUpdatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerUid",
+        "nama",
+        "email",
+        "nip",
+        "pangkatGolongan",
+        "jabatan",
+        "instansi",
+        "kabupatenKota",
+        "noHp",
+        "namaBank",
+        "noRekening",
+        "statusBerkas",
+        "inputMode",
+        "driveFolderId",
+        "driveFolderName",
+        "driveFolderUrl",
+        "attendance",
+        "documents",
+        "spprItems",
+        "verification",
+        "updatedAt",
+        "serverUpdatedAt"
+      ]
+    },
+    "SpeakerDoc": {
+      "title": "SpeakerDoc",
+      "description": "Resource person, moderator, MC, or prayer reader honorarium and PPh 21 tax record.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "nama": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "peran": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "instansi": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "golongan": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "npwp": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "hasNpwp": {
+          "type": "boolean"
+        },
+        "namaBank": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "noRekening": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "materiJudul": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "jumlahJP": {
+          "type": "number"
+        },
+        "tarifPerJP": {
+          "type": "number"
+        },
+        "bruto": {
+          "type": "number"
+        },
+        "tarifPph21Persen": {
+          "type": "number"
+        },
+        "potonganPph21": {
+          "type": "number"
+        },
+        "netto": {
+          "type": "number"
+        },
+        "noKuitansi": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "statusBayar": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "tanggalKegiatan": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "updatedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "serverUpdatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "nama",
+        "peran",
+        "instansi",
+        "golongan",
+        "npwp",
+        "hasNpwp",
+        "namaBank",
+        "noRekening",
+        "materiJudul",
+        "jumlahJP",
+        "tarifPerJP",
+        "bruto",
+        "tarifPph21Persen",
+        "potonganPph21",
+        "netto",
+        "noKuitansi",
+        "statusBayar",
+        "tanggalKegiatan",
+        "updatedByUid",
+        "serverUpdatedAt"
+      ]
+    },
+    "PhotoDoc": {
+      "title": "PhotoDoc",
+      "description": "Categorized activity documentation photo for gallery and BPK visual report.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "kategori": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "judul": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "caption": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "hariKe": {
+          "type": "number"
+        },
+        "tanggal": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "timestamp": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "uploader": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "driveFileId": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "originalSizeKB": {
+          "type": "number"
+        },
+        "compressedSizeKB": {
+          "type": "number"
+        },
+        "imageUrl": {
+          "type": "string",
+          "maxLength": 700000
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["PUBLIC"],
+          "maxLength": 20
+        },
+        "updatedByUid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "serverUpdatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "kategori",
+        "judul",
+        "caption",
+        "hariKe",
+        "tanggal",
+        "timestamp",
+        "uploader",
+        "driveFileId",
+        "originalSizeKB",
+        "compressedSizeKB",
+        "imageUrl",
+        "visibility",
+        "updatedByUid",
+        "serverUpdatedAt"
+      ]
+    },
+    "AuditLogDoc": {
+      "title": "AuditLogDoc",
+      "description": "Immutable BPK/Inspektorat audit log entry.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "actorUid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "timestamp": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "actorName": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "actorRole": {
+          "type": "string",
+          "enum": ["PESERTA", "PANITIA_PROXY", "VERIFIKATOR_SPJ", "DOKUMENTASI", "PPTK"],
+          "maxLength": 40
+        },
+        "actionType": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "targetName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "isFlaggedProxy": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "actorUid",
+        "timestamp",
+        "actorName",
+        "actorRole",
+        "actionType",
+        "targetName",
+        "details",
+        "isFlaggedProxy",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Stores verified committee admin UIDs."
+    },
+    "/activityConfigs/{configId}": {
+      "schema": { "$ref": "#/entities/ActivityConfigDoc" },
+      "description": "Stores global official activity configuration and SBM rates."
+    },
+    "/participants/{participantId}": {
+      "schema": { "$ref": "#/entities/ParticipantDoc" },
+      "description": "Stores participant records, attendance, uploaded SPJ documents, and verification state."
+    },
+    "/speakers/{speakerId}": {
+      "schema": { "$ref": "#/entities/SpeakerDoc" },
+      "description": "Stores speaker honorarium and PPh 21 tax calculation records."
+    },
+    "/photos/{photoId}": {
+      "schema": { "$ref": "#/entities/PhotoDoc" },
+      "description": "Stores activity documentation photos."
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLogDoc" },
+      "description": "Stores immutable BPK/Inspektorat audit trail entries."
+    }
+  }
+}
