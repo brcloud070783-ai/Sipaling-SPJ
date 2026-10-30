@@ -254,18 +254,12 @@ export default async function handler(req, res) {
     fileName: 'vercel.json',
     title: '4. Konfigurasi Deployment Vercel (vercel.json)',
     description:
-      'Mengatur batas memori dan durasi eksekusi Vercel Serverless Functions untuk pemrosesan upload dokumen ke Google Drive.',
+      'Mengarahkan seluruh request /api/* ke Serverless Function /api/index.ts dan halaman frontend ke SPA index.html tanpa error unmatched function pattern.',
     language: 'json',
     code: `{
   "version": 2,
-  "functions": {
-    "api/**/*.js": {
-      "memory": 1024,
-      "maxDuration": 30
-    }
-  },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }`,
