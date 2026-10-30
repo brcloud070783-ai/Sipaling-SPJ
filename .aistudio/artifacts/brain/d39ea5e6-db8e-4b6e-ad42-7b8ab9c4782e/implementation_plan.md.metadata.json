@@ -1,0 +1,6 @@
+{
+  "summary":  "Rencana implementasi lengkap untuk Sistem Informasi Manajemen Kegiatan Kedinasan (SIM-KANTOR) mencakup 5 modul interaktif (Peserta Mobile-First, Proxy Helpdesk Panitia, Verifikator Keuangan SPJ & Narasumber, Seksi Dokumentasi, dan Executive Dashboard PPTK) beserta arsitektur Serverless Google APIs Hybrid dan generator dokumen PDF BPK-ready.",
+  "updatedAt":  "2026-10-29T15:12:31.861730201Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

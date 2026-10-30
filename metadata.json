@@ -1,0 +1,6 @@
+{
+  "name": "SIM-KANTOR — Sistem Informasi Manajemen Kegiatan Kedinasan & Pusat SPJ",
+  "description": "Platform manajemen kegiatan kedinasan, presensi harian, kamera dokumen SPPD/Surat Tugas, generator SPPR, dan verifikasi SPJ BPK-ready berbasis Serverless Google Sheets & Google Drive Panitia.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
