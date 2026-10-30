@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   BookOpen,
+  Calendar,
   Camera,
   CheckCircle2,
   ChevronDown,
@@ -9,9 +10,11 @@ import {
   Download,
   FileSpreadsheet,
   FileText,
+  LogOut,
   MapPin,
   Plus,
   Printer,
+  ShieldCheck,
   Ship,
   Trash2,
   UserCheck,
@@ -55,6 +58,8 @@ interface PesertaModuleProps {
   onOpenDocumentPreview: (doc: PrintableDocumentPayload) => void;
 }
 
+const SESSION_STORAGE_KEY = 'simkantor_peserta_logged_in_v1';
+
 export const PesertaModule: React.FC<PesertaModuleProps> = ({
   config,
   participants,
@@ -68,6 +73,18 @@ export const PesertaModule: React.FC<PesertaModuleProps> = ({
   onSaveSppr,
   onOpenDocumentPreview,
 }) => {
+  // Status apakah peserta sudah login dari halaman Home
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem(SESSION_STORAGE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Mode form pada halaman Home Login Google ('PILIH_AKUN' | 'AKUN_BARU')
+  const [loginMode, setLoginMode] = useState<'PILIH_AKUN' | 'AKUN_BARU'>('PILIH_AKUN');
+
   const activeParticipant =
     participants.find((p) => p.id === selectedParticipantId) || participants[0];
 
@@ -77,7 +94,6 @@ export const PesertaModule: React.FC<PesertaModuleProps> = ({
 
   // Toggle buka/tutup edit biodata agar tampilan utama tetap ringkas
   const [isEditingBio, setIsEditingBio] = useState(false);
-  const [showNewGoogleModal, setShowNewGoogleModal] = useState(false);
 
   // State Biodata Ringkas (Nama, NIP, Instansi, No HP, Rekening)
   const [nama, setNama] = useState('');
@@ -89,7 +105,8 @@ export const PesertaModule: React.FC<PesertaModuleProps> = ({
   const [noRekening, setNoRekening] = useState('');
   const [nominalTiketInput, setNominalTiketInput] = useState<number>(850000);
 
-  // State Login Google Baru
+  // State Login Google Pribadi Baru
+  const [newGoogleEmail, setNewGoogleEmail] = useState('');
   const [newGoogleName, setNewGoogleName] = useState('');
   const [newGoogleNip, setNewGoogleNip] = useState('');
   const [newGoogleInstansi, setNewGoogleInstansi] = useState('');
@@ -130,6 +147,69 @@ export const PesertaModule: React.FC<PesertaModuleProps> = ({
     setTimeout(() => setStatusMessage(null), 3500);
   };
 
+  const handleLoginWithSelectedGoogle = (participantId: string) => {
+    onSelectParticipant(participantId);
+    setIsLoggedIn(true);
+    try {
+      sessionStorage.setItem(SESSION_STORAGE_KEY, 'true');
+    } catch {
+      // ignore storage error
+    }
+    const chosen = participants.find((p) => p.id === participantId);
+    triggerToast(
+      `Selamat datang, ${chosen?.nama || 'Peserta'}. Silakan absen & unggah dokumen SPJ.`
+    );
+  };
+
+  const handleGoogleSignInNew = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGoogleName.trim() || !newGoogleEmail.trim()) return;
+    setIsSubmitting(true);
+    try {
+      const normalizedEmail = newGoogleEmail.includes('@')
+        ? newGoogleEmail.trim().toLowerCase()
+        : `${newGoogleEmail.trim().toLowerCase()}@gmail.com`;
+
+      const createdId = await onSaveBiodata({
+        nama: newGoogleName.trim(),
+        email: normalizedEmail,
+        nip: newGoogleNip.trim() || `1992061520201210${participants.length + 1}`,
+        instansi: newGoogleInstansi.trim() || 'SMAN 1 Kepulauan',
+        kabupatenKota: 'Kab. Kepulauan',
+        pangkatGolongan: GolonganType.GOL_III,
+        jabatan: 'Peserta Kegiatan',
+        noHp: '081277889900',
+        namaBank: 'BRI',
+        noRekening: '0184-01-099887-50-2',
+        inputMode: InputMode.MANDIRI,
+      });
+      if (createdId) onSelectParticipant(createdId);
+      setIsLoggedIn(true);
+      try {
+        sessionStorage.setItem(SESSION_STORAGE_KEY, 'true');
+      } catch {
+        // ignore
+      }
+      setNewGoogleEmail('');
+      setNewGoogleName('');
+      setNewGoogleNip('');
+      setNewGoogleInstansi('');
+      triggerToast(`Berhasil masuk sebagai ${newGoogleName.trim()} (${normalizedEmail}).`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLogoutToHome = () => {
+    setIsLoggedIn(false);
+    try {
+      sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    setStatusMessage(null);
+  };
+
   const handleSaveBiodataForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeParticipant) return;
@@ -148,35 +228,6 @@ export const PesertaModule: React.FC<PesertaModuleProps> = ({
       });
       setIsEditingBio(false);
       triggerToast('Biodata berhasil disimpan.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleGoogleSignInNew = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newGoogleName.trim()) return;
-    setIsSubmitting(true);
-    try {
-      const createdId = await onSaveBiodata({
-        nama: newGoogleName.trim(),
-        email: `${newGoogleName.toLowerCase().replace(/[^a-z0-9]/g, '.')}@gmail.com`,
-        nip: newGoogleNip.trim() || `1992061520201210${participants.length + 1}`,
-        instansi: newGoogleInstansi.trim() || 'SMAN 1 Kepulauan',
-        kabupatenKota: 'Kab. Kepulauan',
-        pangkatGolongan: GolonganType.GOL_III,
-        jabatan: 'Peserta Kegiatan',
-        noHp: '081277889900',
-        namaBank: 'BRI',
-        noRekening: '0184-01-099887-50-2',
-        inputMode: InputMode.MANDIRI,
-      });
-      if (createdId) onSelectParticipant(createdId);
-      setShowNewGoogleModal(false);
-      setNewGoogleName('');
-      setNewGoogleNip('');
-      setNewGoogleInstansi('');
-      triggerToast('Berhasil masuk dengan akun Google peserta.');
     } finally {
       setIsSubmitting(false);
     }
@@ -297,6 +348,267 @@ export const PesertaModule: React.FC<PesertaModuleProps> = ({
 
   if (!activeParticipant) return null;
 
+  // =========================================================================
+  // TAHAP 1: HALAMAN BERANDA (HOME PESERTA) & LOGIN AKUN GOOGLE PRIBADI
+  // =========================================================================
+  if (!isLoggedIn) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5 pb-12">
+        {/* Banner Sambutan / Home Kegiatan */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="bg-slate-900 px-6 py-6 text-white">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-blue-300">
+              Portal Peserta · {config.instansiPenyelenggara}
+            </div>
+            <h1 className="mt-1.5 text-xl font-bold leading-snug sm:text-2xl">
+              {config.namaKegiatan}
+            </h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-300">
+              <span className="flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5 text-blue-400" />
+                {config.lokasiKegiatan}
+              </span>
+              <span className="flex items-center gap-1.5 font-mono">
+                <Calendar className="h-3.5 w-3.5 text-blue-400" />
+                {config.tanggalMulai} s.d. {config.tanggalSelesai} (
+                {config.jumlahHariKegiatan} Hari)
+              </span>
+            </div>
+          </div>
+
+          {/* 3 Langkah Alur Peserta */}
+          <div className="grid grid-cols-1 divide-y divide-slate-200 bg-slate-50/70 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="p-4">
+              <div className="font-mono text-xs font-bold text-blue-700">LANGKAH 01</div>
+              <div className="mt-0.5 text-xs font-bold text-slate-900">
+                Login Akun Google
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-600">
+                Masuk menggunakan akun Google pribadi sebagai identitas resmi peserta.
+              </p>
+            </div>
+            <div className="p-4">
+              <div className="font-mono text-xs font-bold text-blue-700">LANGKAH 02</div>
+              <div className="mt-0.5 text-xs font-bold text-slate-900">
+                Absen &amp; Foto Dokumen
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-600">
+                Check-in harian dan foto Surat Tugas, SPPD/Visum, serta Tiket/SPPR.
+              </p>
+            </div>
+            <div className="p-4">
+              <div className="font-mono text-xs font-bold text-blue-700">LANGKAH 03</div>
+              <div className="mt-0.5 text-xs font-bold text-slate-900">
+                Verifikasi &amp; Pencairan SPJ
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-600">
+                Berkas otomatis masuk ke Google Drive Panitia untuk pencairan uang harian.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Kartu Login Akun Google Pribadi */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              {/* Google "G" Logo Resmi */}
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-2xs shrink-0">
+                <svg className="h-5 w-5" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">
+                  Masuk dengan Akun Google Pribadi
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Silakan masuk terlebih dahulu untuk mengakses halaman absen &amp; upload
+                  dokumen SPJ.
+                </p>
+              </div>
+            </div>
+
+            {/* Switcher Pilih Akun vs Login Email Baru */}
+            <div className="flex rounded-lg bg-slate-100 p-1 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setLoginMode('PILIH_AKUN')}
+                className={`rounded-md px-3 py-1.5 transition-colors ${
+                  loginMode === 'PILIH_AKUN'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Akun Terdaftar
+              </button>
+              <button
+                type="button"
+                onClick={() => setLoginMode('AKUN_BARU')}
+                className={`rounded-md px-3 py-1.5 transition-colors ${
+                  loginMode === 'AKUN_BARU'
+                    ? 'bg-white text-slate-900 shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                + Akun Google Baru
+              </button>
+            </div>
+          </div>
+
+          {loginMode === 'PILIH_AKUN' ? (
+            <div className="mt-5 space-y-2.5 border-t border-slate-200 pt-4">
+              <p className="text-xs font-semibold text-slate-700">
+                Pilih Akun Google Peserta untuk Masuk:
+              </p>
+              <div className="grid grid-cols-1 gap-2.5">
+                {participants.map((p) => {
+                  const docDone = [
+                    p.documents.suratTugas,
+                    p.documents.sppdVisum,
+                    p.documents.buktiTransport || p.documents.spprGenerated,
+                  ].filter(Boolean).length;
+
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex flex-col justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 transition-colors hover:border-blue-300 hover:bg-blue-50/30 sm:flex-row sm:items-center"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-700 text-xs font-bold text-white shrink-0">
+                          {p.nama
+                            .split(' ')
+                            .slice(0, 2)
+                            .map((n) => n[0])
+                            .join('')}
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-slate-900">{p.nama}</div>
+                          <div className="font-mono text-[11px] text-blue-700">
+                            {p.email}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {p.instansi} · Berkas: {docDone}/3
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleLoginWithSelectedGoogle(p.id)}
+                        className="flex min-h-[40px] items-center justify-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-600 transition-colors shrink-0"
+                      >
+                        <UserCheck className="h-4 w-4" />
+                        <span>Masuk sebagai {p.nama.split(' ')[0]}</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <form
+              onSubmit={handleGoogleSignInNew}
+              className="mt-5 space-y-3 border-t border-slate-200 pt-4"
+            >
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Email Akun Google Pribadi
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="contoh: budi.santoso@gmail.com"
+                    value={newGoogleEmail}
+                    onChange={(e) => setNewGoogleEmail(e.target.value)}
+                    className="mt-1 w-full min-h-[40px] rounded-lg border border-slate-300 px-3 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Nama Lengkap &amp; Gelar
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: Budi Santoso, S.Pd."
+                    value={newGoogleName}
+                    onChange={(e) => setNewGoogleName(e.target.value)}
+                    className="mt-1 w-full min-h-[40px] rounded-lg border border-slate-300 px-3 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700">
+                    NIP (Opsional / Isi jika ASN)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="198805122015031004"
+                    value={newGoogleNip}
+                    onChange={(e) => setNewGoogleNip(e.target.value)}
+                    className="mt-1 w-full min-h-[40px] rounded-lg border border-slate-300 px-3 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Asal Instansi / Sekolah
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: SMAN 1 Kepulauan"
+                    value={newGoogleInstansi}
+                    onChange={(e) => setNewGoogleInstansi(e.target.value)}
+                    className="mt-1 w-full min-h-[40px] rounded-lg border border-slate-300 px-3 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-blue-700 px-5 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 transition-colors"
+                >
+                  <UserCheck className="h-4 w-4" />
+                  <span>Lanjutkan Masuk dengan Google</span>
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="mt-5 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[11px] text-slate-600">
+            <ShieldCheck className="h-4 w-4 text-emerald-700 shrink-0" />
+            <span>
+              <strong>Privasi &amp; Keamanan:</strong> Login Google hanya digunakan untuk
+              verifikasi identitas peserta. Seluruh foto dokumen SPJ disimpan terpusat di
+              Google Drive resmi Panitia.
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================================
+  // TAHAP 2: DASHBOARD PESERTA (SETELAH LOGIN AKUN GOOGLE BERHASIL)
+  // =========================================================================
   const hasSt = Boolean(activeParticipant.documents.suratTugas);
   const hasSppd = Boolean(activeParticipant.documents.sppdVisum);
   const hasTransport = Boolean(
@@ -316,14 +628,16 @@ export const PesertaModule: React.FC<PesertaModuleProps> = ({
         </div>
       )}
 
-      {/* 1. KARTU PROFIL & SMART ALERT BANNER RINGKAS */}
+      {/* 1. KARTU PROFIL AKUN GOOGLE AKTIF & TOMBOL KELUAR KE HOME */}
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-1.5 text-xs text-slate-500">
-              <UserCheck className="h-3.5 w-3.5 text-blue-700" />
-              <span>Login Google:</span>
-              <span className="font-mono text-slate-700">{activeParticipant.email}</span>
+              <UserCheck className="h-3.5 w-3.5 text-emerald-700" />
+              <span>Akun Google Aktif:</span>
+              <span className="font-mono font-semibold text-blue-700">
+                {activeParticipant.email}
+              </span>
             </div>
             <h1 className="mt-0.5 text-lg font-bold text-slate-900">
               {activeParticipant.nama}
@@ -335,65 +649,16 @@ export const PesertaModule: React.FC<PesertaModuleProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <select
-              aria-label="Pilih Peserta"
-              value={activeParticipant.id}
-              onChange={(e) => onSelectParticipant(e.target.value)}
-              className="min-h-[40px] rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-medium text-slate-900"
-            >
-              {participants.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nama}
-                </option>
-              ))}
-            </select>
             <button
               type="button"
-              onClick={() => setShowNewGoogleModal(!showNewGoogleModal)}
-              className="min-h-[40px] rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0"
+              onClick={handleLogoutToHome}
+              className="flex min-h-[40px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 whitespace-nowrap shrink-0"
             >
-              + Akun Baru
+              <LogOut className="h-3.5 w-3.5 text-slate-500" />
+              <span>Ganti Akun / Home</span>
             </button>
           </div>
         </div>
-
-        {/* Form Login Google Baru (Tampil hanya saat diklik) */}
-        {showNewGoogleModal && (
-          <form
-            onSubmit={handleGoogleSignInNew}
-            className="mt-3 grid grid-cols-1 gap-2 border-t border-slate-100 pt-3 sm:grid-cols-4"
-          >
-            <input
-              type="text"
-              required
-              placeholder="Nama Lengkap"
-              value={newGoogleName}
-              onChange={(e) => setNewGoogleName(e.target.value)}
-              className="min-h-[38px] rounded-lg border border-slate-300 px-2.5 text-xs"
-            />
-            <input
-              type="text"
-              placeholder="NIP"
-              value={newGoogleNip}
-              onChange={(e) => setNewGoogleNip(e.target.value)}
-              className="min-h-[38px] rounded-lg border border-slate-300 px-2.5 font-mono text-xs"
-            />
-            <input
-              type="text"
-              placeholder="Instansi / Sekolah"
-              value={newGoogleInstansi}
-              onChange={(e) => setNewGoogleInstansi(e.target.value)}
-              className="min-h-[38px] rounded-lg border border-slate-300 px-2.5 text-xs"
-            />
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="min-h-[38px] rounded-lg bg-blue-700 px-3 text-xs font-semibold text-white hover:bg-blue-600"
-            >
-              Masuk Google
-            </button>
-          </form>
-        )}
 
         {/* Smart Alert Bar (1 Baris Ringkas) */}
         <div
