@@ -11,41 +11,75 @@ import {
   ActivityConfig,
   AppModule,
   DocumentStatus,
+  GolonganType,
+  InputMode,
   ParticipantRecord,
   PhotoCategory,
   SimKantorState,
   SpeakerRecord,
+  SpeakerRole,
   SpprItem,
 } from './types/simkantor';
+import { createInitialSimKantorState } from './utils/initialSeedData';
 import { PrintableDocumentPayload } from './utils/pdfGenerator';
+import {
+  calculateHonorariumPPh21,
+  createDocumentationSvg,
+} from './utils/spjCalculators';
+
+const STORAGE_KEY = 'simkantor_hybrid_state_v1';
 
 export default function App() {
-  const [state, setState] = useState<SimKantorState | null>(null);
+  // Inisialisasi langsung dengan data awal agar tidak pernah gagal muat di Vercel
+  const [state, setState] = useState<SimKantorState>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        return JSON.parse(saved) as SimKantorState;
+      }
+    } catch {
+      // Abaikan jika localStorage tidak tersedia
+    }
+    return createInitialSimKantorState();
+  });
+
   const [activeModule, setActiveModule] = useState<AppModule>(AppModule.PESERTA);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string>('pst-002');
   const [previewDoc, setPreviewDoc] = useState<PrintableDocumentPayload | null>(null);
   const [isBlueprintOpen, setIsBlueprintOpen] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchState();
+    fetchStateFromServer();
   }, []);
 
-  const fetchState = async () => {
-    try {
-      setIsLoading(true);
-      const res = await fetch('/api/simkantor/state');
-      if (!res.ok) throw new Error('Gagal memuat data SIM-KANTOR dari server.');
-      const data = (await res.json()) as SimKantorState;
-      setState(data);
-      if (data.participants.length > 0 && !selectedParticipantId) {
-        setSelectedParticipantId(data.participants[0].id);
+  const updateAndPersistState = (updater: (prev: SimKantorState) => SimKantorState) => {
+    setState((prev) => {
+      const next = updater(prev);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Abaikan jika kuota localStorage penuh
       }
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : 'Terjadi kesalahan jaringan.');
-    } finally {
-      setIsLoading(false);
+      return next;
+    });
+  };
+
+  const fetchStateFromServer = async () => {
+    try {
+      const res = await fetch('/api/simkantor/state');
+      if (res.ok) {
+        const data = (await res.json()) as SimKantorState;
+        if (data && Array.isArray(data.participants)) {
+          setState(data);
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          } catch {
+            // Abaikan
+          }
+        }
+      }
+    } catch {
+      // Gunakan state lokal jika Serverless sedang cold-start
     }
   };
 
@@ -55,33 +89,175 @@ export default function App() {
     isProxy = false,
     proxyOfficerName?: string
   ) => {
-    const res = await fetch('/api/simkantor/checkin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        participantId,
+    const checkInTime =
+      new Date().toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) + ' WIB';
+    const tanggal = new Date().toISOString().slice(0, 10);
+
+    // Update optimistik instan
+    updateAndPersistState((prev) => {
+      const next = structuredClone(prev);
+      const p = next.participants.find((item) => item.id === participantId);
+      if (!p) return prev;
+      if (p.attendance.some((a) => a.dayIndex === dayIndex)) return prev;
+
+      p.attendance.push({
         dayIndex,
-        lokasi: state?.config.lokasiKegiatan,
+        tanggal,
+        checkInTime,
+        lokasi: next.config.lokasiKegiatan,
         koordinat: '-6.1538, 106.8499',
+        recordedBy: isProxy
+          ? `PROXY: ${proxyOfficerName || 'Petugas Helpdesk'}`
+          : 'Peserta Mandiri (Google Auth)',
         isProxy,
-        proxyOfficerName,
-      }),
+      });
+
+      p.verification.hariDisetujui = p.attendance.length;
+      p.verification.totalUangHarian =
+        p.verification.hariDisetujui * p.verification.tarifUangHarian;
+      p.verification.totalDiterima =
+        p.verification.totalUangHarian + p.verification.transportDisetujui;
+      p.updatedAt = checkInTime;
+
+      next.auditLogs.unshift({
+        id: `aud-${Date.now()}`,
+        timestamp: `${tanggal} ${checkInTime}`,
+        actorName: isProxy ? proxyOfficerName || 'Panitia Helpdesk' : p.nama,
+        actorRole: isProxy ? 'PANITIA_PROXY' : 'PESERTA',
+        actionType: `CHECKIN_PRESENSI_HARI_${dayIndex}`,
+        targetName: `${p.nama} (${p.nip})`,
+        details: `Check-in presensi Hari ke-${dayIndex} pada pukul ${checkInTime}. Total hadir: ${p.attendance.length} hari.`,
+        isFlaggedProxy: isProxy,
+      });
+      return next;
     });
-    const data = await res.json();
-    if (data.state) setState(data.state);
+
+    try {
+      const res = await fetch('/api/simkantor/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          participantId,
+          dayIndex,
+          lokasi: state.config.lokasiKegiatan,
+          koordinat: '-6.1538, 106.8499',
+          isProxy,
+          proxyOfficerName,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) setState(data.state);
+      }
+    } catch {
+      // Tetap gunakan state lokal yang sudah terupdate
+    }
   };
 
   const handleSaveBiodata = async (
     payload: Partial<ParticipantRecord>
   ): Promise<string | undefined> => {
-    const res = await fetch('/api/simkantor/participant/upsert', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    let createdOrUpdatedId = payload.id;
+
+    updateAndPersistState((prev) => {
+      const next = structuredClone(prev);
+      let p = next.participants.find(
+        (item) => item.id === payload.id || (payload.nip && item.nip === payload.nip)
+      );
+      const isProxy = payload.inputMode === InputMode.PROXY_PANITIA;
+
+      if (!p) {
+        const idx = next.participants.length + 1;
+        const cleanNip = payload.nip || `19900101202012100${idx}`;
+        const newId = `pst-00${idx}`;
+        createdOrUpdatedId = newId;
+        p = {
+          id: newId,
+          nama: payload.nama || 'Peserta Baru',
+          email:
+            payload.email ||
+            `${(payload.nama || 'peserta').toLowerCase().replace(/[^a-z]/g, '.')}@gmail.com`,
+          nip: cleanNip,
+          pangkatGolongan: payload.pangkatGolongan || GolonganType.GOL_III,
+          jabatan: payload.jabatan || 'Peserta Utusan',
+          instansi: payload.instansi || 'Instansi Daerah',
+          kabupatenKota: payload.kabupatenKota || 'Kabupaten/Kota',
+          noHp: payload.noHp || '081200000000',
+          namaBank: payload.namaBank || 'BRI',
+          noRekening: payload.noRekening || '-',
+          statusBerkas: DocumentStatus.BELUM_LENGKAP,
+          inputMode: isProxy ? InputMode.PROXY_PANITIA : InputMode.MANDIRI,
+          proxyOfficerName: isProxy ? payload.proxyOfficerName : undefined,
+          proxyReason: isProxy ? payload.proxyReason : undefined,
+          driveFolderId: `DRV-FOLDER-${cleanNip}`,
+          driveFolderName: `${cleanNip} - ${payload.nama || 'Peserta'}`,
+          driveFolderUrl: `https://drive.google.com/drive/folders/PANITIA_${cleanNip}`,
+          attendance: [
+            {
+              dayIndex: 1,
+              tanggal: new Date().toISOString().slice(0, 10),
+              checkInTime: new Date().toLocaleTimeString('id-ID') + ' WIB',
+              lokasi: next.config.lokasiKegiatan,
+              koordinat: '-6.1538, 106.8499',
+              recordedBy: isProxy
+                ? `PROXY: ${payload.proxyOfficerName}`
+                : 'Peserta Mandiri',
+              isProxy,
+            },
+          ],
+          documents: {},
+          spprItems: [],
+          verification: {
+            hariDisetujui: 1,
+            tarifUangHarian: next.config.tarifUangHarianSbm,
+            totalUangHarian: next.config.tarifUangHarianSbm,
+            transportDisetujui: 0,
+            gunakanSppr: false,
+            totalDiterima: next.config.tarifUangHarianSbm,
+            statusBayar: 'BELUM_DIBAYAR',
+            noKuitansi: `KUI/SPJ/${next.config.tahunAnggaran}/00${idx}`,
+            catatanVerifikator: 'Biodata terdaftar.',
+          },
+          updatedAt: new Date().toLocaleTimeString('id-ID') + ' WIB',
+        };
+        next.participants.unshift(p);
+      } else {
+        createdOrUpdatedId = p.id;
+        p.nama = payload.nama ?? p.nama;
+        p.email = payload.email ?? p.email;
+        p.nip = payload.nip ?? p.nip;
+        p.pangkatGolongan = payload.pangkatGolongan ?? p.pangkatGolongan;
+        p.jabatan = payload.jabatan ?? p.jabatan;
+        p.instansi = payload.instansi ?? p.instansi;
+        p.kabupatenKota = payload.kabupatenKota ?? p.kabupatenKota;
+        p.noHp = payload.noHp ?? p.noHp;
+        p.namaBank = payload.namaBank ?? p.namaBank;
+        p.noRekening = payload.noRekening ?? p.noRekening;
+        p.driveFolderName = `${p.nip} - ${p.nama}`;
+      }
+      return next;
     });
-    const data = await res.json();
-    if (data.state) setState(data.state);
-    return data.participantId;
+
+    try {
+      const res = await fetch('/api/simkantor/participant/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) setState(data.state);
+        if (data.participantId) return data.participantId;
+      }
+    } catch {
+      // Tetap gunakan state lokal
+    }
+
+    return createdOrUpdatedId;
   };
 
   const handleUploadDocument = async (payload: {
@@ -96,23 +272,136 @@ export default function App() {
     auditNote?: string;
     nominalTransport?: number;
   }) => {
-    const res = await fetch('/api/simkantor/participant/upload-doc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    updateAndPersistState((prev) => {
+      const next = structuredClone(prev);
+      const p = next.participants.find((item) => item.id === payload.participantId);
+      if (!p) return prev;
+
+      const prefixMap = {
+        suratTugas: 'SURAT_TUGAS',
+        sppdVisum: 'SPPD_VISUM',
+        buktiTransport: 'TIKET_TRANSPORT',
+        buktiBayarSusulan: 'BUKTI_SUSULAN_KEUANGAN',
+      };
+      const prefix = prefixMap[payload.docType];
+      const cleanName = p.nama.replace(/[^a-zA-Z0-9]/g, '_');
+      const fileName = `${
+        payload.isProxy ? 'PROXY_' : ''
+      }${prefix}_${p.nip}_${cleanName}.jpg`;
+      const driveFileId = `DRV-${prefix}-${Date.now().toString().slice(-5)}`;
+
+      const uploadedDoc = {
+        fileName,
+        uploadedAt:
+          new Date().toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }) + ' WIB',
+        uploadedBy: payload.uploadedBy,
+        isProxy: payload.isProxy,
+        isLateFinanceUpload: payload.isLateFinanceUpload,
+        auditNote: payload.auditNote,
+        originalSizeKB: payload.originalSizeKB,
+        compressedSizeKB: payload.compressedSizeKB,
+        driveFileId,
+        driveViewUrl: `https://drive.google.com/file/d/${driveFileId}/view`,
+        dataUrl: payload.dataUrl,
+      };
+
+      if (payload.docType === 'suratTugas') p.documents.suratTugas = uploadedDoc;
+      if (payload.docType === 'sppdVisum') p.documents.sppdVisum = uploadedDoc;
+      if (payload.docType === 'buktiTransport') {
+        p.documents.buktiTransport = uploadedDoc;
+        if (payload.nominalTransport && payload.nominalTransport > 0) {
+          p.verification.transportDisetujui = payload.nominalTransport;
+          p.verification.gunakanSppr = false;
+          p.verification.totalDiterima =
+            p.verification.totalUangHarian + p.verification.transportDisetujui;
+        }
+      }
+      if (payload.docType === 'buktiBayarSusulan') {
+        p.documents.buktiBayarSusulan = uploadedDoc;
+      }
+
+      const hasSt = Boolean(p.documents.suratTugas);
+      const hasSppd = Boolean(p.documents.sppdVisum);
+      const hasTr = Boolean(
+        p.documents.buktiTransport ||
+          p.documents.spprGenerated ||
+          p.documents.buktiBayarSusulan
+      );
+      if (hasSt && hasSppd && hasTr && p.statusBerkas === DocumentStatus.BELUM_LENGKAP) {
+        p.statusBerkas = DocumentStatus.MENUNGGU_VERIFIKASI;
+      }
+
+      return next;
     });
-    const data = await res.json();
-    if (data.state) setState(data.state);
+
+    try {
+      const res = await fetch('/api/simkantor/participant/upload-doc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) setState(data.state);
+      }
+    } catch {
+      // Tetap gunakan state lokal
+    }
   };
 
   const handleSaveSppr = async (participantId: string, items: SpprItem[]) => {
-    const res = await fetch('/api/simkantor/participant/sppr', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ participantId, items }),
+    updateAndPersistState((prev) => {
+      const next = structuredClone(prev);
+      const p = next.participants.find((item) => item.id === participantId);
+      if (!p) return prev;
+
+      p.spprItems = items;
+      const totalSppr = items.reduce((s, i) => s + (Number(i.nominal) || 0), 0);
+      const nomorSppr = `SPPR/${next.config.tahunAnggaran}/${p.id.toUpperCase()}`;
+
+      p.documents.spprGenerated = {
+        nomorSppr,
+        generatedAt:
+          new Date().toLocaleTimeString('id-ID', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }) + ' WIB',
+        totalNominal: totalSppr,
+        items,
+        driveFileId: `DRV-SPPR-${p.nip}`,
+      };
+
+      p.verification.transportDisetujui = totalSppr;
+      p.verification.gunakanSppr = true;
+      p.verification.totalDiterima = p.verification.totalUangHarian + totalSppr;
+
+      if (
+        p.documents.suratTugas &&
+        p.documents.sppdVisum &&
+        p.statusBerkas === DocumentStatus.BELUM_LENGKAP
+      ) {
+        p.statusBerkas = DocumentStatus.MENUNGGU_VERIFIKASI;
+      }
+
+      return next;
     });
-    const data = await res.json();
-    if (data.state) setState(data.state);
+
+    try {
+      const res = await fetch('/api/simkantor/participant/sppr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId, items }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) setState(data.state);
+      }
+    } catch {
+      // Tetap gunakan state lokal
+    }
   };
 
   const handleVerifyParticipant = async (payload: {
@@ -126,23 +415,108 @@ export default function App() {
     catatanVerifikator: string;
     verifikatorName: string;
   }) => {
-    const res = await fetch('/api/simkantor/finance/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    updateAndPersistState((prev) => {
+      const next = structuredClone(prev);
+      const p = next.participants.find((item) => item.id === payload.participantId);
+      if (!p) return prev;
+
+      const totalUh = payload.hariDisetujui * payload.tarifUangHarian;
+      const totalAll = totalUh + payload.transportDisetujui;
+
+      p.statusBerkas = payload.statusBerkas;
+      p.verification = {
+        ...p.verification,
+        hariDisetujui: payload.hariDisetujui,
+        tarifUangHarian: payload.tarifUangHarian,
+        totalUangHarian: totalUh,
+        transportDisetujui: payload.transportDisetujui,
+        gunakanSppr: payload.gunakanSppr,
+        totalDiterima: totalAll,
+        statusBayar: payload.statusBayar,
+        catatanVerifikator: payload.catatanVerifikator,
+        verifikatorName: payload.verifikatorName,
+      };
+      return next;
     });
-    const data = await res.json();
-    if (data.state) setState(data.state);
+
+    try {
+      const res = await fetch('/api/simkantor/finance/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) setState(data.state);
+      }
+    } catch {
+      // Tetap gunakan state lokal
+    }
   };
 
   const handleUpsertSpeaker = async (payload: Partial<SpeakerRecord>) => {
-    const res = await fetch('/api/simkantor/speakers/upsert', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    updateAndPersistState((prev) => {
+      const next = structuredClone(prev);
+      const calc = calculateHonorariumPPh21(
+        Number(payload.jumlahJP) || 2,
+        Number(payload.tarifPerJP) || 900000,
+        (payload.golongan as GolonganType) || GolonganType.GOL_IV,
+        Boolean(payload.hasNpwp)
+      );
+
+      const existing = next.speakers.find((s) => s.id === payload.id);
+      if (existing) {
+        existing.nama = payload.nama || existing.nama;
+        existing.peran = payload.peran || existing.peran;
+        existing.instansi = payload.instansi || existing.instansi;
+        existing.golongan = payload.golongan || existing.golongan;
+        existing.npwp = payload.npwp || existing.npwp;
+        existing.namaBank = payload.namaBank || existing.namaBank;
+        existing.noRekening = payload.noRekening || existing.noRekening;
+        existing.materiJudul = payload.materiJudul || existing.materiJudul;
+        existing.jumlahJP = Number(payload.jumlahJP) || existing.jumlahJP;
+        existing.tarifPerJP = Number(payload.tarifPerJP) || existing.tarifPerJP;
+        existing.bruto = calc.bruto;
+        existing.tarifPph21Persen = calc.tarifPph21Persen;
+        existing.potonganPph21 = calc.potonganPph21;
+        existing.netto = calc.netto;
+      } else {
+        const idx = next.speakers.length + 1;
+        next.speakers.push({
+          id: `spk-00${idx}`,
+          nama: payload.nama || 'Narasumber',
+          peran: payload.peran || SpeakerRole.NARASUMBER,
+          instansi: payload.instansi || 'Instansi',
+          golongan: payload.golongan || GolonganType.GOL_IV,
+          npwp: payload.npwp || '-',
+          hasNpwp: Boolean(payload.hasNpwp),
+          namaBank: payload.namaBank || 'BNI',
+          noRekening: payload.noRekening || '-',
+          materiJudul: payload.materiJudul || 'Materi Kegiatan',
+          jumlahJP: Number(payload.jumlahJP) || 2,
+          tarifPerJP: Number(payload.tarifPerJP) || 900000,
+          ...calc,
+          noKuitansi: `KUI/HONOR/${next.config.tahunAnggaran}/00${idx}`,
+          statusBayar: 'TERVERIFIKASI',
+          tanggalKegiatan: new Date().toISOString().slice(0, 10),
+        });
+      }
+      return next;
     });
-    const data = await res.json();
-    if (data.state) setState(data.state);
+
+    try {
+      const res = await fetch('/api/simkantor/speakers/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) setState(data.state);
+      }
+    } catch {
+      // Tetap gunakan state lokal
+    }
   };
 
   const handleUploadPhoto = async (payload: {
@@ -155,59 +529,84 @@ export default function App() {
     originalSizeKB?: number;
     compressedSizeKB?: number;
   }) => {
-    const res = await fetch('/api/simkantor/documentation/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    updateAndPersistState((prev) => {
+      const next = structuredClone(prev);
+      const newIndex = next.photos.length + 1;
+      const tanggal = new Date().toISOString().slice(0, 10);
+      next.photos.unshift({
+        id: `dok-00${newIndex}`,
+        kategori: payload.kategori,
+        judul: payload.judul,
+        caption: payload.caption,
+        hariKe: payload.hariKe,
+        tanggal,
+        timestamp: `${tanggal} WIB`,
+        uploader: payload.uploader,
+        driveFileId: `DRV-FOTO-0${newIndex}`,
+        originalSizeKB: payload.originalSizeKB || 3200,
+        compressedSizeKB: payload.compressedSizeKB || 260,
+        imageUrl:
+          payload.imageUrl ||
+          createDocumentationSvg({
+            kategori: payload.kategori,
+            judul: payload.judul,
+            hariKe: payload.hariKe,
+            tanggal,
+            themeColor: '#1E3A8A',
+          }),
+      });
+      return next;
     });
-    const data = await res.json();
-    if (data.state) setState(data.state);
+
+    try {
+      const res = await fetch('/api/simkantor/documentation/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) setState(data.state);
+      }
+    } catch {
+      // Tetap gunakan state lokal
+    }
   };
 
   const handleUpdateConfig = async (newConfig: Partial<ActivityConfig>) => {
-    const res = await fetch('/api/simkantor/config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newConfig),
+    updateAndPersistState((prev) => {
+      const next = structuredClone(prev);
+      const oldSbm = next.config.tarifUangHarianSbm;
+      next.config = { ...next.config, ...newConfig };
+      if (
+        newConfig.tarifUangHarianSbm &&
+        Number(newConfig.tarifUangHarianSbm) !== oldSbm
+      ) {
+        const updatedTarif = Number(newConfig.tarifUangHarianSbm);
+        next.participants.forEach((p) => {
+          p.verification.tarifUangHarian = updatedTarif;
+          p.verification.totalUangHarian = p.verification.hariDisetujui * updatedTarif;
+          p.verification.totalDiterima =
+            p.verification.totalUangHarian + p.verification.transportDisetujui;
+        });
+      }
+      return next;
     });
-    const data = await res.json();
-    if (data.state) setState(data.state);
+
+    try {
+      const res = await fetch('/api/simkantor/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConfig),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.state) setState(data.state);
+      }
+    } catch {
+      // Tetap gunakan state lokal
+    }
   };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50 p-6">
-        <div className="mx-auto max-w-7xl space-y-4">
-          <div className="h-14 w-full rounded-xl bg-slate-200" />
-          <div className="h-32 w-full rounded-xl bg-slate-200" />
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="h-96 rounded-xl bg-slate-200" />
-            <div className="h-96 rounded-xl bg-slate-200" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (errorMsg || !state) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <div className="max-w-md rounded-xl border border-red-200 bg-white p-6 text-center">
-          <h1 className="text-base font-bold text-slate-900">
-            Gagal Memuat Sistem SIM-KANTOR
-          </h1>
-          <p className="mt-1 text-xs text-slate-600">{errorMsg}</p>
-          <button
-            type="button"
-            onClick={fetchState}
-            className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white"
-          >
-            Muat Ulang
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col">
@@ -290,7 +689,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Content Container (1440px Baseline / max-w-7xl) */}
+      {/* Main Content Container */}
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6">
         {activeModule === AppModule.PESERTA && (
           <PesertaModule
